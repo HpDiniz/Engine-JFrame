@@ -1,39 +1,40 @@
-package com.hpdiniz.main;
+package com.gcstudios.main;
 
 import java.awt.Canvas;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.FontFormatException;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
+import javax.imageio.ImageIO;
 import javax.swing.JFrame;
 
-import com.hpdiniz.entities.BulletShoot;
-import com.hpdiniz.entities.Enemy;
-import com.hpdiniz.entities.Entity;
-import com.hpdiniz.entities.Player;
-import com.hpdiniz.graficos.Spritesheet;
-import com.hpdiniz.graficos.UI;
-import com.hpdiniz.world.World;
 
-public class Game extends Canvas implements Runnable,KeyListener,MouseListener{
+import com.gcstudios.entities.BulletShoot;
+import com.gcstudios.entities.Enemy;
+import com.gcstudios.entities.Entity;
+import com.gcstudios.entities.Player;
+import com.gcstudios.graficos.Spritesheet;
+import com.gcstudios.graficos.UI;
+import com.gcstudios.world.World;
+
+public class Game extends Canvas implements Runnable,KeyListener,MouseListener,MouseMotionListener{
 
 	private static final long serialVersionUID = 1L;
 	public static JFrame frame;
@@ -66,21 +67,32 @@ public class Game extends Canvas implements Runnable,KeyListener,MouseListener{
 	private boolean restartGame = false;
 	
 	public Menu menu;
-	public static int[] pixels;
-	public static int[] lightMap;
 	
+	
+	public int[] pixels; 
+	public BufferedImage lightmap;
+	public int[] lightMapPixels;
+	
+	public int mx,my;
 	public Game(){
 		//Sound.musicBackground.loop();
 		rand = new Random();
 		addKeyListener(this);
 		addMouseListener(this);
+		addMouseMotionListener(this);
 		setPreferredSize(new Dimension(WIDTH*SCALE,HEIGHT*SCALE));
 		initFrame();
 		//Inicializando objetos.
 		ui = new UI();
-		lightMap = new int[WIDTH*HEIGHT];
 		image = new BufferedImage(WIDTH,HEIGHT,BufferedImage.TYPE_INT_RGB);
-		pixels =((DataBufferInt)image.getRaster().getDataBuffer()).getData();
+		try {
+			lightmap = ImageIO.read(getClass().getResource("/lightmap.png"));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		lightMapPixels = new int[lightmap.getWidth() * lightmap.getHeight()];
+		lightmap.getRGB(0, 0, lightmap.getWidth(), lightmap.getHeight(), lightMapPixels,0, lightmap.getWidth());
+		pixels = ((DataBufferInt)image.getRaster().getDataBuffer()).getData();
 		entities = new ArrayList<Entity>();
 		enemies = new ArrayList<Enemy>();
 		bullets = new ArrayList<BulletShoot>();
@@ -89,7 +101,15 @@ public class Game extends Canvas implements Runnable,KeyListener,MouseListener{
 		player = new Player(0,0,16,16,spritesheet.getSprite(32, 0,16,16));
 		entities.add(player);
 		world = new World("/level1.png");
-		
+		/*
+		try {
+			newfont = Font.createFont(Font.TRUETYPE_FONT, stream).deriveFont(70f);
+		} catch (FontFormatException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		*/
 		
 		menu = new Menu();
 	}
@@ -126,7 +146,8 @@ public class Game extends Canvas implements Runnable,KeyListener,MouseListener{
 	
 	public void tick(){
 		if(gameState == "NORMAL") {
-		this.restartGame = false;	
+		this.restartGame = false;
+		
 		for(int i = 0; i < entities.size(); i++) {
 			Entity e = entities.get(i);
 			e.tick();
@@ -165,82 +186,38 @@ public class Game extends Canvas implements Runnable,KeyListener,MouseListener{
 				World.restartGame(newWorld);
 			}
 		}else if(gameState == "MENU") {
-			
+			player.updateCamera();
 			menu.tick();
 		}
 	}
 	
-
-	public static String loadGame(int encode) {
-		String line = "";
-		File file = new File("save.txt");
-		if(file.exists()) {
-			try {
-				String singleLine = null;
-				BufferedReader reader = new BufferedReader(new FileReader("save.txt"));
-				try {
-					while((singleLine = reader.readLine()) != null) {
-						String[] trans = singleLine.split(":");
-						char[] val = trans[1].toCharArray();
-						trans[1] = "";
-						for(int i = 0; i < val.length; i++) {
-							val[i]-=encode;
-							trans[1]+=val[i];
-						}
-						line+=trans[0];
-						line+=":";
-						line+=trans[1];
-						line+="/";
-					}
-				} catch( IOException e) {
-					e.printStackTrace();
-				}		
-			} catch( IOException e) {
-				e.printStackTrace();
+	/*
+	public void drawRectangleExample(int xoff,int yoff) {
+		for(int xx = 0; xx < 32; xx++) {
+			for(int yy = 0; yy < 32; yy++) {
+				int xOff = xx + xoff;
+				int yOff = yy + yoff;
+				if(xOff < 0 || yOff < 0 || xOff >= WIDTH || yOff >= HEIGHT)
+					continue;
+				pixels[xOff + (yOff*WIDTH)] = 0xff0000;
 			}
 		}
-		
-		return line;
-		
 	}
-
-	public static void saveGame(String[] val1, int[] val2, int encode) {
-		BufferedWriter write = null;
+	*/
+	
+	public void applyLight() {
 		
-		try {
-			write = new BufferedWriter(new FileWriter("save.txt"));
-		} catch( IOException e) {
-			e.printStackTrace();
-		}
-		
-		for(int i = 0; i < val1.length; i++) {
-			String current = val1[i];
-			current+=":";
-			char[] value = Integer.toString(val2[i]).toCharArray();
-			for(int n = 0; n < value.length; n++) {
-				value[n]+=encode;
-				current+=value[n];
-			}
-			
-			try {
-				write.write(current);
-				if(i < val1.length - 1)
-					write.newLine();
-			} catch( IOException e) {
-				e.printStackTrace();
+		/*
+		for(int xx =0; xx < Game.WIDTH; xx++) {
+			for(int yy = 0; yy < Game.HEIGHT; yy++) {
+				if(lightMapPixels[xx+(yy * Game.WIDTH)] == 0xffffffff) {
+					pixels[xx+(yy*Game.WIDTH)] = 0;
+				}
 			}
 		}
-		try {
-			write.flush();
-			write.close();
-		} catch( IOException e) {
-			e.printStackTrace();
-		}
-
+		*/
+	
 	}
-	
-	
-	
 	
 	public void render(){
 		BufferStrategy bs = this.getBufferStrategy();
@@ -255,6 +232,7 @@ public class Game extends Canvas implements Runnable,KeyListener,MouseListener{
 		/*Renderização do jogo*/
 		//Graphics2D g2 = (Graphics2D) g;
 		world.render(g);
+		Collections.sort(entities,Entity.nodeSorter);
 		for(int i = 0; i < entities.size(); i++) {
 			Entity e = entities.get(i);
 			e.render(g);
@@ -262,6 +240,8 @@ public class Game extends Canvas implements Runnable,KeyListener,MouseListener{
 		for(int i = 0; i < bullets.size(); i++) {
 			bullets.get(i).render(g);
 		}
+		
+		applyLight();
 		ui.render(g);
 		/***/
 		g.dispose();
@@ -283,6 +263,19 @@ public class Game extends Canvas implements Runnable,KeyListener,MouseListener{
 		}else if(gameState == "MENU") {
 			menu.render(g);
 		}
+		/*
+		Graphics2D g2 = (Graphics2D) g;
+		double angleMouse = Math.atan2(200+25 - my,200+25 - mx);
+		
+		g2.rotate(angleMouse, 200+25,200+25);
+		g.setColor(Color.red);
+		g.fillRect(200, 200, 50, 50);
+		*/
+		/*
+		g.setFont(newfont);
+		g.setColor(Color.red);
+		g.drawString("Teste com a nova fonte", 90, 90);
+		*/
 		bs.show();
 	}
 	
@@ -416,6 +409,19 @@ public class Game extends Canvas implements Runnable,KeyListener,MouseListener{
 	@Override
 	public void mouseReleased(MouseEvent arg0) {
 		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void mouseDragged(MouseEvent arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void mouseMoved(MouseEvent e) {
+		this.mx = e.getX();
+		this.my = e.getY();
 		
 	}
 
